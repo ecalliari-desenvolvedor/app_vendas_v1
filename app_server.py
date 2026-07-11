@@ -11,7 +11,7 @@ from functools import wraps
 
 from flask import Flask, jsonify, request, session
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import UniqueConstraint, text
+from sqlalchemy import UniqueConstraint, text, inspect
 import requests
 
 # ==========================================
@@ -248,15 +248,23 @@ def enviar_email_pedido_admin(usuario, pedido, itens):
 # 4. INICIALIZAÇÃO DO BANCO
 # ==========================================
 def coluna_existe(tabela, coluna):
-    res = db.session.execute(text(f'PRAGMA table_info({tabela})'))
-    return coluna in [linha[1] for linha in res.fetchall()]
+    inspector = inspect(db.engine)
+    # Verifica se a tabela existe antes de procurar a coluna
+    if not inspector.has_table(tabela):
+        return False
+    # Busca os nomes de todas as colunas da tabela
+    colunas = [coluna_info['name'] for coluna_info in inspector.get_columns(tabela)]
+    return coluna in colunas
 
 def atualizar_schema_legado():
     cols_add = {
         'cnpj': 'VARCHAR(14)', 'associacoes': "VARCHAR(255) DEFAULT 'Varejo'",
-        'empresa_ativa': "VARCHAR(120) DEFAULT 'Varejo'", 'perm_download_tabelas': 'BOOLEAN DEFAULT 1',
-        'perm_fazer_pedido': 'BOOLEAN DEFAULT 1', 'perm_solicitar_visita': 'BOOLEAN DEFAULT 1',
-        'perm_visualizar_pedidos': 'BOOLEAN DEFAULT 1', 'is_admin': 'BOOLEAN DEFAULT 0'
+        'empresa_ativa': "VARCHAR(120) DEFAULT 'Varejo'", 
+        'perm_download_tabelas': 'BOOLEAN DEFAULT TRUE',
+        'perm_fazer_pedido': 'BOOLEAN DEFAULT TRUE', 
+        'perm_solicitar_visita': 'BOOLEAN DEFAULT TRUE',
+        'perm_visualizar_pedidos': 'BOOLEAN DEFAULT TRUE', 
+        'is_admin': 'BOOLEAN DEFAULT FALSE'
     }
     alterado = False
     for col, tip in cols_add.items():
