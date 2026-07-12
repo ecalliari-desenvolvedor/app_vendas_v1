@@ -468,17 +468,24 @@ def atualizar_tabelas():
     return jsonify({'mensagem': f'Tabela atualizada para {associacao}.'}), 200
 
 @app.route('/salvar_pedido', methods=['POST'])
-@login_required
 def salvar_pedido():
+    # Agora o backend lê o ID direto do JSON que o Frontend envia
     dados = get_payload()
-    usuario_id = session['user_data']['id']
+    usuario_id = dados.get('usuario_id')
+
+    if not usuario_id:
+        return jsonify({'erro': 'ID do usuário não fornecido.'}), 401
+
     usuario = Usuario.query.get(usuario_id)
+    if not usuario:
+        return jsonify({'erro': 'Usuário não encontrado no banco de dados.'}), 404
 
     if not usuario.is_admin and not usuario.perm_fazer_pedido:
-        return jsonify({'erro': 'Sem permissão para fazer pedidos'}), 403
+        return jsonify({'erro': 'Sem permissão para fazer pedidos.'}), 403
 
     itens = dados.get('itens', [])
-    if not itens: return jsonify({'erro': 'Nenhum item no pedido'}), 400
+    if not itens: 
+        return jsonify({'erro': 'Nenhum item no pedido'}), 400
 
     try:
         valor_total = sum(i['valor_total'] for i in itens)
@@ -488,14 +495,19 @@ def salvar_pedido():
 
         for item in itens:
             db.session.add(ItensPedido(
-                pedido_id=novo_pedido.id, referencia_produto=item['referencia_produto'],
-                quantidade=item['quantidade'], valor_unitario=item['valor_unitario'], valor_total=item['valor_total']
+                pedido_id=novo_pedido.id, 
+                referencia_produto=item['referencia_produto'],
+                quantidade=item['quantidade'], 
+                valor_unitario=item['valor_unitario'], 
+                valor_total=item['valor_total']
             ))
         db.session.commit()
 
         aviso = None
-        try: enviar_email_pedido_admin(usuario, novo_pedido, itens)
-        except Exception as e: aviso = str(e)
+        try: 
+            enviar_email_pedido_admin(usuario, novo_pedido, itens)
+        except Exception as e: 
+            aviso = str(e)
 
         return jsonify({'mensagem': 'Pedido salvo!', 'pedido_id': novo_pedido.id, 'aviso_email': aviso}), 201
     except Exception as e:
@@ -503,7 +515,6 @@ def salvar_pedido():
         return jsonify({'erro': str(e)}), 500
 
 @app.route('/meus_pedidos', methods=['GET'])
-@login_required
 def listar_meus_pedidos():
     pedidos = Pedido.query.filter_by(usuario_id=session['user_data']['id']).order_by(Pedido.data_pedido.desc()).all()
     return jsonify([{
@@ -512,7 +523,6 @@ def listar_meus_pedidos():
     } for p in pedidos]), 200
 
 @app.route('/meus_pedidos/<int:pedido_id>/itens', methods=['GET'])
-@login_required
 def listar_meus_itens_pedido(pedido_id):
     pedido = Pedido.query.filter_by(id=pedido_id, usuario_id=session['user_data']['id']).first()
     if not pedido: return jsonify({'erro': 'Pedido não encontrado'}), 404
